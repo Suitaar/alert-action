@@ -1,0 +1,54 @@
+# The checks of each pull request: shellcheck, actionlint, the script test against a local
+# stand-in, and the action itself with inputs that never reach a service.
+name: Test
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scripts:
+    name: shellcheck, actionlint, script test
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: shellcheck
+        run: shellcheck src/*.sh test/*.sh
+      - name: actionlint
+        run: docker run --rm -v "$PWD":/repo -w /repo rhysd/actionlint:1.7.7
+      - name: Script test
+        run: test/notify-test.sh
+
+  action:
+    name: the action, without a call
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: An unknown service is a warning
+        id: soft
+        uses: ./
+        with:
+          api-key: not-a-key
+          service: nowhere
+          message: never sent
+      - name: With fail-on-error, it fails the step
+        id: strict
+        continue-on-error: true
+        uses: ./
+        with:
+          api-key: not-a-key
+          service: nowhere
+          message: never sent
+          fail-on-error: "true"
+      - name: Check the outcomes
+        env:
+          SOFT: ${{ steps.soft.outcome }}
+          STRICT: ${{ steps.strict.outcome }}
+        run: |
+          [ "$SOFT" = success ] || { echo "::error::Expected success, got $SOFT"; exit 1; }
+          [ "$STRICT" = failure ] || { echo "::error::Expected failure, got $STRICT"; exit 1; }
