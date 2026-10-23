@@ -1,0 +1,74 @@
+name: Suitaar Alert (Opsgenie-compatible)
+description: Create, close, acknowledge and note alerts, and ping heartbeats, in Suitaar or Opsgenie (US or EU).
+author: Suitaar
+branding:
+  icon: bell
+  color: orange
+
+inputs:
+  api-key:
+    description: The key of a Suitaar source, or an Opsgenie API key. Use a secret.
+    required: true
+  service:
+    description: "Where the alert goes: suitaar (default), opsgenie (US) or opsgenie-eu."
+    default: suitaar
+  action:
+    description: "create (default), close, acknowledge, note or heartbeat."
+    default: create
+  alias:
+    description: The key of the alert. Repeats with the same alias count on one alert. Required for close, acknowledge and note.
+  message:
+    description: The title of the alert. Required for create.
+  description:
+    description: The text of the alert.
+  priority:
+    description: P1 to P5. Without it, the service's default (P3).
+  tags:
+    description: Tags, separated by commas.
+  details:
+    description: 'Extra fields, a JSON object of texts, for example {"run": "42"}.'
+  note:
+    description: A note. Required for the note action.
+  user:
+    description: Who did it, for example github.actor.
+  source:
+    description: Where the alert comes from, for example "GitHub Actions".
+  heartbeat:
+    description: The name of the heartbeat. Required for the heartbeat action.
+  fail-on-error:
+    description: "true: a failed call fails the step. false (default): it is a warning only."
+    default: "false"
+
+outputs:
+  status:
+    description: The HTTP status of the answer (000 when no answer came).
+    value: ${{ steps.call.outputs.status }}
+  request-id:
+    description: The request id of the answer.
+    value: ${{ steps.call.outputs.request-id }}
+
+runs:
+  using: composite
+  steps:
+    - id: call
+      shell: bash
+      env:
+        NOTIFY_API_KEY: ${{ inputs.api-key }}
+        NOTIFY_SERVICE: ${{ inputs.service }}
+        # Always empty here: a workflow's own env cannot change where the key goes.
+        NOTIFY_BASE_URL: ""
+        NOTIFY_ACTION: ${{ inputs.action }}
+        NOTIFY_ALIAS: ${{ inputs.alias }}
+        NOTIFY_MESSAGE: ${{ inputs.message }}
+        NOTIFY_DESCRIPTION: ${{ inputs.description }}
+        NOTIFY_PRIORITY: ${{ inputs.priority }}
+        NOTIFY_TAGS: ${{ inputs.tags }}
+        NOTIFY_DETAILS: ${{ inputs.details }}
+        NOTIFY_NOTE: ${{ inputs.note }}
+        NOTIFY_USER: ${{ inputs.user }}
+        NOTIFY_SOURCE: ${{ inputs.source }}
+        NOTIFY_HEARTBEAT: ${{ inputs.heartbeat }}
+        NOTIFY_FAIL_ON_ERROR: ${{ inputs.fail-on-error }}
+      run: |
+        [ -z "$NOTIFY_API_KEY" ] || echo "::add-mask::$NOTIFY_API_KEY"
+        "$GITHUB_ACTION_PATH/src/notify.sh"

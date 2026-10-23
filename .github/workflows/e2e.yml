@@ -1,0 +1,53 @@
+# The action against suitaar.com, by hand only: create, close and a heartbeat ping with the key of
+# a test source (the repository secret SUITAAR_TEST_KEY).
+name: End-to-end
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  suitaar:
+    name: against suitaar.com
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Create
+        id: create
+        uses: ./
+        with:
+          api-key: ${{ secrets.SUITAAR_TEST_KEY }}
+          message: "alert-action end-to-end run ${{ github.run_id }}"
+          alias: "alert-action-e2e-${{ github.run_id }}"
+          priority: P5
+          source: alert-action end-to-end
+          fail-on-error: "true"
+      - name: Close
+        id: close
+        uses: ./
+        with:
+          api-key: ${{ secrets.SUITAAR_TEST_KEY }}
+          action: close
+          alias: "alert-action-e2e-${{ github.run_id }}"
+          user: alert-action end-to-end
+          fail-on-error: "true"
+      - name: Heartbeat ping
+        id: ping
+        uses: ./
+        with:
+          api-key: ${{ secrets.SUITAAR_TEST_KEY }}
+          action: heartbeat
+          heartbeat: alert-action-e2e
+          fail-on-error: "true"
+      - name: Check the outputs
+        env:
+          CREATE: ${{ steps.create.outputs.status }}
+          CLOSE: ${{ steps.close.outputs.status }}
+          PING: ${{ steps.ping.outputs.status }}
+          REQUEST_ID: ${{ steps.create.outputs.request-id }}
+        run: |
+          echo "create $CREATE (request $REQUEST_ID), close $CLOSE, ping $PING"
+          [ "$CREATE" = 202 ] && [ "$CLOSE" = 202 ] && [ "$PING" = 202 ] && [ -n "$REQUEST_ID" ]
