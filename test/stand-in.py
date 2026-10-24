@@ -1,8 +1,9 @@
 """A local stand-in of the Opsgenie Alert and Heartbeat API for test/notify-test.sh.
 
 It records each request as one JSON line (method, path, query, the Authorization header, the body)
-and answers as the mode file says: "ok" (202 with a request id), "401" (a refused key) or "500"
-(a server error with an HTML body).
+and answers as the mode file says: "ok" (202 with a request id), "401" (a refused key), "429" (too
+many requests), or "500" or "503" (a server error with an HTML body). A list such as "500,ok" gives
+one answer for each request, in order; the last one stays.
 """
 import http.server
 import json
@@ -14,7 +15,11 @@ port, folder = int(sys.argv[1]), sys.argv[2]
 
 def mode():
     with open(folder + "/mode") as f:
-        return f.read().strip()
+        answers = f.read().strip().split(",")
+    if len(answers) > 1:
+        with open(folder + "/mode", "w") as f:
+            f.write(",".join(answers[1:]))
+    return answers[0]
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -26,10 +31,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             f.write(json.dumps({"method": self.command, "path": url.path, "query": url.query,
                                 "auth": self.headers.get("Authorization"), "body": body}) + "\n")
         m = mode()
-        if m == "500":
+        if m in ("500", "503"):
             data = b"<html>Bad gateway</html>"
-            self.send_response(500)
+            self.send_response(int(m))
             self.send_header("Content-Type", "text/html")
+        elif m == "429":
+            data = json.dumps({"message": "Too many requests", "took": 0.001, "requestId": "req-429"}).encode()
+            self.send_response(429)
+            self.send_header("Content-Type", "application/json")
         elif m == "401":
             data = json.dumps({"message": "Key format is not valid!", "took": 0.001, "requestId": "req-401"}).encode()
             self.send_response(401)

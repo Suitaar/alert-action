@@ -6,6 +6,7 @@ API, which Suitaar also speaks. So a workflow moves from Opsgenie to Suitaar by 
 and the key.
 
 - A composite action in bash: `curl` and `jq` only, no Node, no build.
+- A call with no answer, a 5xx or a 429 is tried again, up to 3 times in about a minute (after 5 s, then 20 s). Another 4xx, such as a wrong key, is not tried again. Give a `create` an `alias`: if an answer is lost after the alert arrived, the second try then counts as a repeat of the same alert, not a new one.
 - A failed call is a warning by default, never a failed workflow (`fail-on-error: "true"` changes it).
 - The key stays in an environment variable: it is masked, and it never appears on a command line or in the log.
 
