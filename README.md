@@ -13,12 +13,20 @@ and the key.
 each action. Opsgenie (US and EU) gets the same requests, as Opsgenie documents them; this
 repository does not test against Opsgenie itself.
 
+## Get a key
+
+- **Suitaar:** log in at [suitaar.com](https://suitaar.com), add a source, and copy its key. The
+  [setup guide](https://suitaar.com/guide#github-actions) shows the steps. The free plan stays free after the beta.
+- **Opsgenie:** the API key of an Opsgenie API integration.
+
+Put the key in a repository secret, for example `SUITAAR_KEY`.
+
 ## Alert when a job fails, close it when the job passes again
 
 ```yaml
 - name: Alert on failure
   if: failure()
-  uses: Suitaar/alert-action@<commit sha>  # v0.1.0
+  uses: Suitaar/alert-action@v0.1.1
   with:
     api-key: ${{ secrets.SUITAAR_KEY }}
     alias: ci-${{ github.workflow }}-${{ github.ref_name }}
@@ -29,7 +37,7 @@ repository does not test against Opsgenie itself.
 
 - name: Close on success
   if: success()
-  uses: Suitaar/alert-action@<commit sha>  # v0.1.0
+  uses: Suitaar/alert-action@v0.1.1
   with:
     api-key: ${{ secrets.SUITAAR_KEY }}
     action: close
@@ -50,7 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: ./backup.sh
-      - uses: Suitaar/alert-action@<commit sha>  # v0.1.0
+      - uses: Suitaar/alert-action@v0.1.1
         with:
           api-key: ${{ secrets.SUITAAR_KEY }}
           action: heartbeat
@@ -58,6 +66,21 @@ jobs:
 ```
 
 When the pings stop, Suitaar (or Opsgenie) opens an alert. Make the heartbeat in the service first.
+
+## Move from Opsgenie to Suitaar
+
+With Opsgenie, set `service: opsgenie` (or `opsgenie-eu`) and use your Opsgenie API key:
+
+```yaml
+- uses: Suitaar/alert-action@v0.1.1
+  with:
+    api-key: ${{ secrets.OPSGENIE_KEY }}
+    service: opsgenie
+    message: "${{ github.workflow }} failed"
+```
+
+To move to Suitaar later, change `service` to `suitaar` (or leave it out) and the secret to a Suitaar
+source key. The rest of the step stays the same.
 
 ## Inputs
 
@@ -87,7 +110,10 @@ When the pings stop, Suitaar (or Opsgenie) opens an alert. Make the heartbeat in
 
 ## Pin a commit
 
-Use a full commit SHA in `uses:`, with the version in a comment. A tag can move; a commit cannot.
+The examples use the tag `v0.1.1`. For the strongest guarantee, use its full commit SHA in `uses:`,
+with the version in a comment (`Suitaar/alert-action@<commit sha>  # v0.1.1`): a tag can move, a
+commit cannot. Version 0.x: new inputs can come; an existing input does not change without a new
+major version.
 
 ## Development
 
