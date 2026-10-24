@@ -34,12 +34,14 @@ echo ok >"$work/mode"
 python3 "$here/stand-in.py" "$port" "$work" & server=$!
 for _ in $(seq 50); do curl -s -o /dev/null "http://127.0.0.1:$port/" && break; sleep 0.1; done
 
-# run [VAR=value …]: notify.sh with the stand-in and the test key; output in $work/out.
+# run [VAR=value …]: notify.sh with the stand-in and the test key, no waits between tries; output in
+# $work/out.
 run() {
 	: >"$work/github-output"
 	env -i PATH="$PATH" HOME="$HOME" NOTIFY_BASE_URL="http://127.0.0.1:$port" NOTIFY_API_KEY="$key" \
-		GITHUB_OUTPUT="$work/github-output" "$@" "$notify" >"$work/out" 2>&1
+		NOTIFY_RETRY_DELAYS="0 0" GITHUB_OUTPUT="$work/github-output" "$@" "$notify" >"$work/out" 2>&1
 }
+requests() { wc -l <"$work/requests" | tr -d ' '; }
 
 echo "== create"
 run NOTIFY_ACTION=create NOTIFY_MESSAGE='Build "main" * failed' NOTIFY_ALIAS="ci-main" \
@@ -101,9 +103,42 @@ run NOTIFY_ACTION=create NOTIFY_MESSAGE="m"; code=$?
 check "500 without JSON: a warning without the HTML body" "$(yes_if [ "$code" = 0 ] && has "::warning::Suitaar alert: create answered 500." && lacks "<html>")"
 echo ok >"$work/mode"
 env -i PATH="$PATH" NOTIFY_BASE_URL="http://127.0.0.1:1" NOTIFY_API_KEY="$key" GITHUB_OUTPUT="$work/github-output" \
-	NOTIFY_ACTION=create NOTIFY_MESSAGE="m" "$notify" >"$work/out" 2>&1; code=$?
+	NOTIFY_RETRY_DELAYS="0 0" NOTIFY_ACTION=create NOTIFY_MESSAGE="m" "$notify" >"$work/out" 2>&1; code=$?
 check "no answer: a warning, exit 0" "$(yes_if [ "$code" = 0 ] && has "::warning::Suitaar alert: create got no answer.")"
+check "no answer: tried 3 times" "$(yes_if [ "$(grep -c "got no answer, trying again" "$work/out")" = 2 ])"
 check "never prints the key in any failure" "$(yes_if lacks "$key")"
+
+echo "== tries again after no answer, a 5xx or a 429; never after another 4xx"
+for case in "500,ok|500" "503,ok|503" "429,ok|429"; do
+	IFS='|' read -r answers first <<<"$case"
+	echo "$answers" >"$work/mode"
+	: >"$work/requests"
+	run NOTIFY_ACTION=create NOTIFY_MESSAGE="m"; code=$?
+	check "$answers: 2 requests, exit 0, status 202" "$(yes_if [ "$(requests)" = 2 ] && [ "$code" = 0 ] && [ "$(output status)" = 202 ])"
+	check "$answers: says it tries again, then the result" \
+		"$(yes_if has "Suitaar alert: create answered $first, trying again in 0 s." && has "Suitaar alert: create answered 202 (request req-1).")"
+done
+echo 500 >"$work/mode"
+: >"$work/requests"
+run NOTIFY_ACTION=close NOTIFY_ALIAS="ci-main"; code=$?
+check "500 each time: 3 requests, then a warning with status 500" \
+	"$(yes_if [ "$(requests)" = 3 ] && [ "$code" = 0 ] && has "::warning::Suitaar alert: close answered 500." && [ "$(output status)" = 500 ])"
+check "the outputs are written once" "$(yes_if [ "$(grep -c '^status=' "$work/github-output")" = 1 ])"
+: >"$work/requests"
+run NOTIFY_ACTION=heartbeat NOTIFY_HEARTBEAT="nightly" NOTIFY_FAIL_ON_ERROR=true; code=$?
+check "500 each time with fail-on-error: 3 requests, exit 1" "$(yes_if [ "$(requests)" = 3 ] && [ "$code" = 1 ])"
+echo 401 >"$work/mode"
+: >"$work/requests"
+run NOTIFY_ACTION=create NOTIFY_MESSAGE="m"; code=$?
+check "401: 1 request, no second try" "$(yes_if [ "$(requests)" = 1 ] && lacks "trying again")"
+echo "500,ok" >"$work/mode"
+: >"$work/requests"
+: >"$work/github-output"
+env -i PATH="$PATH" HOME="$HOME" NOTIFY_BASE_URL="http://127.0.0.1:$port" NOTIFY_API_KEY="$key" \
+	GITHUB_OUTPUT="$work/github-output" NOTIFY_ACTION=create NOTIFY_MESSAGE="m" "$notify" >"$work/out" 2>&1
+check "the default waits: 5 s before the second try" "$(yes_if [ "$(requests)" = 2 ] && has "trying again in 5 s.")"
+check "never prints the key while it tries again" "$(yes_if lacks "$key")"
+echo ok >"$work/mode"
 
 echo "== only https, except a local test server"
 : >"$work/requests"

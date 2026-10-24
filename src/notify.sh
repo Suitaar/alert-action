@@ -5,6 +5,8 @@
 #   NOTIFY_SERVICE    suitaar (default), opsgenie or opsgenie-eu: the base URL (src/base-url.sh)
 #   NOTIFY_BASE_URL   only for the tests: a local stand-in instead of the service. action.yml
 #                     always sets it empty, so a workflow's own env cannot change where the key goes.
+#   NOTIFY_RETRY_DELAYS  only for the tests: the waits in seconds before the second and third try
+#                     (default "5 20"). action.yml always sets it empty.
 #   NOTIFY_API_KEY    the key (never printed; it goes to curl through a config on stdin)
 #   NOTIFY_ACTION     create, close, acknowledge, note or heartbeat
 #   NOTIFY_ALIAS, NOTIFY_MESSAGE, NOTIFY_DESCRIPTION, NOTIFY_PRIORITY, NOTIFY_TAGS, NOTIFY_DETAILS,
@@ -90,11 +92,28 @@ heartbeat)
 *) fail "action must be create, close, acknowledge, note or heartbeat, but was $action." ;;
 esac
 
-# The key goes to curl as a config on stdin, never on a command line.
-status=$(printf 'header = "Authorization: GenieKey %s"\n' "$NOTIFY_API_KEY" |
-	curl -sS --max-time 15 -K - -X "$method" -H "Content-Type: application/json" ${body:+--data "$body"} \
-		-D "$work/headers" -o "$work/body" -w '%{http_code}' "$base$path" 2>/dev/null)
-status=${status:-000}
+# call: one request; sets status (000 without an answer). The key goes to curl as a config on
+# stdin, never on a command line.
+call() {
+	rm -f "$work/headers" "$work/body"
+	status=$(printf 'header = "Authorization: GenieKey %s"\n' "$NOTIFY_API_KEY" |
+		curl -sS --max-time 15 -K - -X "$method" -H "Content-Type: application/json" ${body:+--data "$body"} \
+			-D "$work/headers" -o "$work/body" -w '%{http_code}' "$base$path" 2>/dev/null)
+	status=${status:-000}
+}
+
+# Up to 3 tries: again after no answer, a 5xx or a 429, never after another 4xx.
+read -r -a delays <<<"${NOTIFY_RETRY_DELAYS:-5 20}"
+call
+for delay in "${delays[@]}"; do
+	case "$status" in
+	000) echo "Suitaar alert: $action got no answer, trying again in $delay s." ;;
+	5?? | 429) echo "Suitaar alert: $action answered $status, trying again in $delay s." ;;
+	*) break ;;
+	esac
+	sleep "$delay"
+	call
+done
 request_id=$(jq -r '.requestId // empty' "$work/body" 2>/dev/null)
 if [ -z "$request_id" ]; then
 	request_id=$(sed -n 's/^[Xx]-[Rr]equest-[Ii]d: *//p' "$work/headers" 2>/dev/null | tr -d '\r' | head -n 1)

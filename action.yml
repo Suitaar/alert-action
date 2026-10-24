@@ -57,6 +57,7 @@ runs:
         NOTIFY_SERVICE: ${{ inputs.service }}
         # Always empty here: a workflow's own env cannot change where the key goes.
         NOTIFY_BASE_URL: ""
+        NOTIFY_RETRY_DELAYS: ""
         NOTIFY_ACTION: ${{ inputs.action }}
         NOTIFY_ALIAS: ${{ inputs.alias }}
         NOTIFY_MESSAGE: ${{ inputs.message }}
