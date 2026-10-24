@@ -27,7 +27,7 @@ Put the key in a repository secret, for example `SUITAAR_KEY`.
 ```yaml
 - name: Alert on failure
   if: failure()
-  uses: Suitaar/alert-action@v0.1.1
+  uses: Suitaar/alert-action@v0.1.2
   with:
     api-key: ${{ secrets.SUITAAR_KEY }}
     alias: ci-${{ github.workflow }}-${{ github.ref_name }}
@@ -38,7 +38,7 @@ Put the key in a repository secret, for example `SUITAAR_KEY`.
 
 - name: Close on success
   if: success()
-  uses: Suitaar/alert-action@v0.1.1
+  uses: Suitaar/alert-action@v0.1.2
   with:
     api-key: ${{ secrets.SUITAAR_KEY }}
     action: close
@@ -59,7 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: ./backup.sh
-      - uses: Suitaar/alert-action@v0.1.1
+      - uses: Suitaar/alert-action@v0.1.2
         with:
           api-key: ${{ secrets.SUITAAR_KEY }}
           action: heartbeat
@@ -73,7 +73,7 @@ When the pings stop, Suitaar (or Opsgenie) opens an alert. Make the heartbeat in
 With Opsgenie, set `service: opsgenie` (or `opsgenie-eu`) and use your Opsgenie API key:
 
 ```yaml
-- uses: Suitaar/alert-action@v0.1.1
+- uses: Suitaar/alert-action@v0.1.2
   with:
     api-key: ${{ secrets.OPSGENIE_KEY }}
     service: opsgenie
@@ -111,8 +111,8 @@ source key. The rest of the step stays the same.
 
 ## Pin a commit
 
-The examples use the tag `v0.1.1`. For the strongest guarantee, use its full commit SHA in `uses:`,
-with the version in a comment (`Suitaar/alert-action@<commit sha>  # v0.1.1`): a tag can move, a
+The examples use the tag `v0.1.2`. For the strongest guarantee, use its full commit SHA in `uses:`,
+with the version in a comment (`Suitaar/alert-action@<commit sha>  # v0.1.2`): a tag can move, a
 commit cannot. Version 0.x: new inputs can come; an existing input does not change without a new
 major version.
 
